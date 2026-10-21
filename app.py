@@ -23,6 +23,7 @@ import json
 import os
 import re
 import socket
+import ssl
 import subprocess
 import sys
 import urllib.parse
@@ -388,7 +389,7 @@ def accepted_by_hash(marker):
     return accepted
 
 
-def remember_submission(draft_hash, outcome, http_status):
+def remember_submission(draft_hash, outcome, http_status, error_category=None):
     """Persist webhook state beside the approval record.
 
     scripts/approve_outputs.py rewrites outputs/approval_record.md from
@@ -399,11 +400,14 @@ def remember_submission(draft_hash, outcome, http_status):
     accepted = accepted_by_hash(current)
     if outcome == "accepted":
         accepted[draft_hash] = http_status
+    if error_category not in FAILURE_CATEGORIES:
+        error_category = None
     marker = {
         "accepted_by_hash": accepted,
         "last_draft_sha256": draft_hash,
         "last_http_status": http_status,
         "last_outcome": outcome,
+        "last_error_category": error_category,
         "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
     save_submission_marker(marker)
@@ -414,6 +418,28 @@ def outcome_for_status(code):
     if isinstance(code, int) and 200 <= code <= 299:
         return "accepted"
     return "failed"
+
+
+FAILURE_CATEGORIES = frozenset({
+    "timeout",
+    "connection_refused",
+    "dns",
+    "tls",
+    "connection_error",
+})
+
+
+def connection_failure_category(exc):
+    """Map a connection failure to a fixed category. Never return exception text."""
+    if isinstance(exc, (TimeoutError, socket.timeout)):
+        return "timeout"
+    if isinstance(exc, ssl.SSLError):
+        return "tls"
+    if isinstance(exc, ConnectionRefusedError):
+        return "connection_refused"
+    if isinstance(exc, socket.gaierror):
+        return "dns"
+    return "connection_error"
 
 
 def post_signed_webhook(url, secret, body, timeout):
@@ -446,8 +472,12 @@ def post_signed_webhook(url, secret, body, timeout):
         except OSError:
             pass
         return {"outcome": outcome_for_status(code), "http_status": code}
-    except (TimeoutError, socket.timeout, http.client.HTTPException, OSError):
-        return {"outcome": "unknown", "http_status": None}
+    except (TimeoutError, socket.timeout, http.client.HTTPException, OSError) as exc:
+        return {
+            "outcome": "unknown",
+            "http_status": None,
+            "error_category": connection_failure_category(exc),
+        }
     finally:
         try:
             connection.close()
@@ -503,15 +533,23 @@ def submit_activepieces():
     result = post_signed_webhook(url, secret, WEBHOOK_BODY, WEBHOOK_TIMEOUT_SECONDS)
     marker_saved = True
     try:
-        remember_submission(draft_hash, result["outcome"], result.get("http_status"))
+        remember_submission(
+            draft_hash,
+            result["outcome"],
+            result.get("http_status"),
+            result.get("error_category"),
+        )
     except OSError:
         marker_saved = False
-    return {
+    recorded = {
         "outcome": result["outcome"],
         "http_status": result.get("http_status"),
         "reason": "response",
         "marker_saved": marker_saved,
     }
+    if result.get("error_category") in FAILURE_CATEGORIES:
+        recorded["error_category"] = result["error_category"]
+    return recorded
 
 
 def webhook_feedback(webhook):
@@ -556,12 +594,17 @@ def webhook_feedback(webhook):
             "No automatic retry was made.",
         )
     if outcome == "unknown":
+        category = webhook.get("error_category")
+        category_note = ""
+        if category in FAILURE_CATEGORIES:
+            category_note = f" Failure category: {category}."
         return (
             "unknown",
             "Local approval is recorded. "
             "Webhook outcome unknown; verify the Activepieces run before retrying. "
             "The request may have been accepted even though this page did not receive a response. "
-            "No automatic retry was made.",
+            "No automatic retry was made."
+            + category_note,
         )
     if outcome == "failed" and webhook.get("reason") == "drafts_unreadable":
         return (
@@ -647,7 +690,10 @@ def standing_webhook_feedback():
             "The external submission still needs attention.",
         )
     if last_outcome == "unknown":
-        return webhook_feedback({"outcome": "unknown"})
+        return webhook_feedback({
+            "outcome": "unknown",
+            "error_category": marker.get("last_error_category"),
+        })
     if last_outcome == "not_configured":
         return webhook_feedback({"outcome": "not_configured", "missing": []})
     if last_outcome == "failed":
