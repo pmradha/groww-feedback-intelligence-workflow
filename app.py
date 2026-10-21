@@ -14,6 +14,7 @@ The page does not append a document, create an email draft, or send email.
 import csv
 import importlib.util
 import io
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -24,6 +25,64 @@ ROOT = Path(__file__).resolve().parent
 PULSE_PATH = ROOT / "outputs" / "weekly_product_pulse.md"
 FEE_PATH = ROOT / "outputs" / "fee_explainer.md"
 APPROVE_SCRIPT = ROOT / "scripts" / "approve_outputs.py"
+REVIEW_CSV = ROOT / "data" / "groww_reviews_12_weeks.csv"
+
+PAGE_STYLE = """
+<style>
+.gfi-header {
+  background: #0b1f3a;
+  color: #f7f9fc;
+  border-radius: 12px;
+  padding: 0.85rem 1.05rem 0.8rem;
+  margin: 0 0 0.85rem 0;
+}
+.gfi-header h1 {
+  color: #f7f9fc;
+  font-size: 1.35rem;
+  font-weight: 650;
+  line-height: 1.25;
+  margin: 0 0 0.15rem 0;
+}
+.gfi-header p {
+  color: #d5deea;
+  font-size: 0.92rem;
+  line-height: 1.4;
+  margin: 0;
+}
+div[data-testid="stMarkdown"] h2 {
+  font-size: 1.05rem;
+  font-weight: 650;
+  line-height: 1.35;
+  margin: 0.85rem 0 0.35rem 0;
+}
+div[data-testid="stHeading"] h3 {
+  font-size: 1.02rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+section.main > div.block-container {
+  padding-top: 1.25rem;
+  padding-bottom: 2rem;
+}
+@media (max-width: 700px) {
+  [data-testid="stHorizontalBlock"] {
+    flex-wrap: wrap;
+  }
+  [data-testid="stHorizontalBlock"] > [data-testid="column"] {
+    width: 100% !important;
+    flex: 1 1 100% !important;
+    min-width: 100% !important;
+  }
+}
+</style>
+"""
+
+HEADER_HTML = """
+<div class="gfi-header">
+  <h1>Groww Feedback Intelligence</h1>
+  <p>Customer feedback · Weekly review</p>
+</div>
+"""
 
 
 def load_approval_script():
@@ -40,6 +99,71 @@ def read_draft(path):
     if not path.is_file():
         return None
     return path.read_text(encoding="utf-8")
+
+
+def without_document_h1(text):
+    """Drop a draft's opening Markdown H1. The page header is the only title."""
+    lines = text.splitlines()
+    removed = False
+    kept = []
+    for line in lines:
+        if not removed and line.startswith("# ") and not line.startswith("## "):
+            removed = True
+            continue
+        kept.append(line)
+    return "\n".join(kept).strip()
+
+
+def section_body(text, heading):
+    match = re.search(rf"(?m)^##\s+{re.escape(heading)}\s*$", text)
+    if match is None:
+        return None
+    rest = text[match.end() :]
+    nxt = re.search(r"(?m)^##\s+", rest)
+    if nxt:
+        rest = rest[: nxt.start()]
+    return rest
+
+
+def saved_review_rows():
+    """Count rows in the existing 12-week CSV. Nothing is written."""
+    with REVIEW_CSV.open(newline="", encoding="utf-8") as handle:
+        reader = csv.reader(handle)
+        next(reader, None)
+        return sum(1 for _ in reader)
+
+
+def summary_figures(pulse):
+    if not pulse:
+        return "Unavailable", "Unavailable"
+    count_match = re.search(r"([\d,]+)\s+English Google Play reviews", pulse)
+    if count_match:
+        reviews = count_match.group(1)
+    else:
+        reviews = f"{saved_review_rows():,}"
+    themes_body = section_body(pulse, "Top three themes")
+    if themes_body is None:
+        themes = "Unavailable"
+    else:
+        themes = str(len(re.findall(r"(?m)^\d+\.\s+\S", themes_body)))
+    return reviews, themes
+
+
+def approval_status():
+    """Read the approval record when it already exists. Do not create it."""
+    record_path = approve_outputs.DEFAULT_RECORD
+    if not record_path.is_file():
+        return "Pending"
+    text = record_path.read_text(encoding="utf-8")
+    match = re.search(r"(?m)^-\s+Decision:\s*(\S+)\s*$", text)
+    if match is None:
+        return "Pending"
+    decision = match.group(1)
+    if decision == "approved":
+        return "Approved"
+    if decision == "revision_requested":
+        return "Revision requested"
+    return decision
 
 
 def describe_upload(uploaded):
@@ -111,64 +235,63 @@ def submit_decision(decision, reason, acknowledged):
     return status, output
 
 
-def main():
-    st.set_page_config(page_title="Groww Feedback Intelligence", layout="wide")
-    st.title("Groww Feedback Intelligence")
-    st.write(
-        "Review the Weekly Product Pulse and the Fee Explainer. "
-        "Opening this page checks the existing drafts. "
-        "It does not approve them, append a document, or send email."
-    )
-    st.info(
-        "These drafts were generated from the dataset already in `data/`. "
-        "Uploading a CSV does not regenerate them, does not replace that dataset, "
-        "and is not saved."
-    )
-
-    st.header("Upload Groww reviews")
-    uploaded = st.file_uploader(
-        "Choose a Groww reviews CSV",
-        type=["csv"],
-        help="The file stays in this browser session. It is not written to data/.",
-    )
-    if uploaded is not None:
+def render_upload():
+    with st.container(border=True):
+        st.markdown(
+            "Uploading a CSV does not currently regenerate the outputs, "
+            "does not replace `data/`, and is not saved."
+        )
+        uploaded = st.file_uploader(
+            "Upload a reviews CSV",
+            type=["csv"],
+            help="The file stays in this browser session. It is not written to data/.",
+            key="review_csv",
+        )
+        if uploaded is None:
+            return
         summary = describe_upload(uploaded)
         if "error" in summary:
             st.error(summary["error"])
-        else:
-            st.write(
-                f"In memory only: `{summary['name']}`, "
-                f"{summary['rows']} data rows, {summary['bytes']} bytes."
+            return
+        st.write(
+            f"In memory only: `{summary['name']}`, "
+            f"{summary['rows']} data rows, {summary['bytes']} bytes."
+        )
+        st.write("Columns: " + ", ".join(summary["columns"]))
+        needed = {"reviewId", "content"}
+        missing = needed.difference(summary["columns"])
+        if missing:
+            st.warning(
+                "This upload is missing "
+                + ", ".join(sorted(missing))
+                + ". The drafts below still come from the saved dataset."
             )
-            st.write("Columns: " + ", ".join(summary["columns"]))
-            needed = {"reviewId", "content"}
-            missing = needed.difference(summary["columns"])
-            if missing:
-                st.warning(
-                    "This upload is missing "
-                    + ", ".join(sorted(missing))
-                    + ". The drafts below still come from the saved dataset."
-                )
-            else:
-                st.success(
-                    "The upload has reviewId and content. "
-                    "The drafts below were not regenerated from it."
-                )
+        else:
+            st.success(
+                "The upload has reviewId and content. "
+                "The drafts below were not regenerated from it."
+            )
 
-    pulse = read_draft(PULSE_PATH)
-    fee = read_draft(FEE_PATH)
-    st.header("Weekly Product Pulse")
-    if pulse is None:
-        st.error("Missing outputs/weekly_product_pulse.md.")
-    else:
-        st.markdown(pulse)
-    st.header("Fee Explainer")
-    if fee is None:
-        st.error("Missing outputs/fee_explainer.md.")
-    else:
-        st.markdown(fee)
 
-    st.header("Validation")
+def render_draft(path_label, text):
+    if text is None:
+        st.error(f"Missing {path_label}.")
+        return
+    with st.container(border=True):
+        st.markdown(without_document_h1(text))
+
+
+def render_approval():
+    st.subheader("Approval status")
+    st.write(approval_status())
+    st.markdown(
+        "Opening this page does not write an approval record. "
+        "Activepieces is not connected. "
+        "Email is never sent. "
+        "No document is appended and no email draft is created."
+    )
+
+    st.subheader("Validation")
     st.write(
         "Results come from `scripts/validate_outputs.py`. "
         "A warning is not proof that the fee amounts are correct."
@@ -198,9 +321,8 @@ def main():
     elif not warnings and exit_code == 0:
         st.success("Validation passed with no warnings.")
 
-    st.header("Decision")
-    st.write(
-        "Activepieces is not connected. "
+    st.subheader("Decision")
+    st.markdown(
         "Approve and Request Revision call `scripts/approve_outputs.py`. "
         "That script writes `outputs/approval_record.md` only after a decision. "
         "It does not append a document, create an email draft, or send email."
@@ -208,19 +330,27 @@ def main():
     warnings_present = bool(warnings) or exit_code == 2
     acknowledged = True
     if warnings_present and not blocked:
-        acknowledged = st.checkbox(approve_outputs.ACK_LINE)
+        acknowledged = st.checkbox(approve_outputs.ACK_LINE, key="ack_warnings")
         if not acknowledged:
             st.info("Acknowledge the warning before approving or requesting revision.")
     reason = st.text_area(
         "Revision reason",
         placeholder="Required for Request Revision.",
+        key="revision_reason",
     )
     approve_disabled = blocked or (warnings_present and not acknowledged)
     revise_disabled = approve_disabled or not reason.strip()
     approve_column, revise_column = st.columns(2)
-    approve_clicked = approve_column.button("Approve", disabled=approve_disabled)
+    approve_clicked = approve_column.button(
+        "Approve",
+        type="primary",
+        disabled=approve_disabled,
+        key="approve_outputs",
+    )
     revise_clicked = revise_column.button(
-        "Request Revision", disabled=revise_disabled
+        "Request Revision",
+        disabled=revise_disabled,
+        key="request_revision",
     )
     if not reason.strip():
         st.caption("Request Revision stays unavailable until a reason is entered.")
@@ -248,6 +378,32 @@ def main():
     if decision_output:
         st.subheader("Approval script output")
         st.code(decision_output)
+
+
+def main():
+    st.set_page_config(page_title="Groww Feedback Intelligence", layout="centered")
+    st.markdown(PAGE_STYLE, unsafe_allow_html=True)
+    st.markdown(HEADER_HTML, unsafe_allow_html=True)
+
+    pulse = read_draft(PULSE_PATH)
+    fee = read_draft(FEE_PATH)
+    reviews, themes = summary_figures(pulse)
+    left, middle, right = st.columns(3, gap="small")
+    left.metric("Reviews analysed", reviews, border=True)
+    middle.metric("Top themes", themes, border=True)
+    right.metric("Review status", approval_status(), border=True)
+
+    render_upload()
+
+    pulse_tab, fee_tab, approval_tab = st.tabs(
+        ["Product Pulse", "Fee Explainer", "Approval"]
+    )
+    with pulse_tab:
+        render_draft("outputs/weekly_product_pulse.md", pulse)
+    with fee_tab:
+        render_draft("outputs/fee_explainer.md", fee)
+    with approval_tab:
+        render_approval()
 
 
 main()
