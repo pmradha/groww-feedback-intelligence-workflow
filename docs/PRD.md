@@ -77,7 +77,7 @@ The record appended to the document includes the themes, quotes, fee issue, fee 
 - Two official source links.
 - A last-checked date.
 
-Neither output exists yet.
+Drafts of both outputs are in `outputs/`. `scripts/validate_outputs.py` checks their structure and citations. `scripts/approve_outputs.py` is the human gate. A local approval record exists only after a person runs that script. Document append and the email draft are still separate, unimplemented steps.
 
 ## Validation and safety
 
@@ -88,9 +88,13 @@ Before approval, validation must:
 - Confirm both official links were retrieved and that each fee claim follows from those sources.
 - Remove claims that the reviews or the official sources do not support.
 
+`scripts/validate_outputs.py` implements the length, quote, review-ID, and source-link checks. It counts Product Pulse words with the title included. A quote must match the CSV text exactly, and it may be part of a longer review. Conflicting fee wording that is still unresolved is reported as a warning, not as a resolved fact. The script does not prove that the fee amounts are correct, and it does not re-fetch Groww’s pages.
+
+`scripts/approve_outputs.py` runs that validator first. A failure blocks approval and writes no record. Warnings must be acknowledged in the typed line `I acknowledge the warnings`. The reviewer then approves or requests revision. A revision stores the reason and stops. An approval stores the decision and a UTC timestamp in `outputs/approval_record.md`. Neither decision appends a document, creates an email draft, or sends email.
+
 Dataset checks already recorded in `docs/m5-groww-feedback-analysis.md` are not a substitute for this output validation.
 
-No document append and no email draft may run before approval. The email draft is internal and is not sent by the workflow.
+No document append and no email draft may run before approval. The email draft is internal and is not sent by the workflow. Those two MCP actions are not implemented. The approval record is not either of those actions.
 
 ## Acceptance criteria
 
@@ -102,7 +106,7 @@ No document append and no email draft may run before approval. The email draft i
 - The repository has no document-append or email-draft artifact dated before an approval record.
 - No workflow step sends email.
 
-The first two criteria are met by the files now in the repository. The rest describe outputs and controls that are still to be built.
+The dataset and theme-analysis criteria are met by the files now in the repository. Drafts of the Product Pulse and Fee Explainer are in `outputs/`. Validation and the local approval gate are implemented. Document append and the email draft are not implemented. No workflow step sends email. The approval record does not prove that the fee amounts are correct.
 
 ## Success metrics
 
@@ -117,9 +121,9 @@ These are proposed checks for later, not results:
 ## Dependencies and constraints
 
 - Input data is the collection already saved by `collect_groww_reviews.py`.
-- Official fee retrieval depends on public Groww sources that have not been collected yet.
-- Document append and email draft are planned as MCP actions. No MCP connection is configured in this repository.
-- The human approval gate is a product requirement. There is no approval record yet.
+- The current fee draft uses public Groww pages already recorded in `docs/source-list.md`. Validation checks that the explainer’s Groww URLs are in that list. It does not prove the fee amounts.
+- Document append and email draft are planned as MCP actions. No MCP connection is configured in this repository. Approval does not call them.
+- The human approval gate is `scripts/approve_outputs.py`. It writes `outputs/approval_record.md` only when a person approves or requests revision. There is no approval record until that script is run.
 
 ## Known limitations
 
@@ -137,10 +141,11 @@ These are proposed checks for later, not results:
 | Review collection and coverage checks | Implemented and validated |
 | Keyword theme analysis with review IDs | Implemented in `docs/m5-groww-feedback-analysis.md` |
 | Semantic clustering of themes | Planned, not yet implemented. The current analysis uses keyword rules. |
-| Official Groww fee-source retrieval | Not implemented |
-| Weekly Product Pulse | Not produced |
-| Fee Explainer | Not produced |
-| Automated validation of those outputs | Not implemented |
-| Human approval gate | Specified, not implemented |
-| MCP document append and email draft | Not implemented |
+| Official Groww fee-source retrieval | Pages used for the fee draft are listed in `docs/source-list.md`. This is not an automated retrieval step, and it is not a fee audit. |
+| Weekly Product Pulse | Draft in `outputs/weekly_product_pulse.md` |
+| Fee Explainer | Draft in `outputs/fee_explainer.md`. The ₹5 and lower-of-₹5-or-2.5% minimums are not reconciled. |
+| Automated validation of those outputs | Implemented in `scripts/validate_outputs.py`. It checks structure and citations. It does not prove fee amounts. |
+| Human approval gate | Implemented in `scripts/approve_outputs.py`. It writes a local approve or revise record and stops before any MCP action. |
+| Streamlit review UI | First version in `app.py`. It displays the existing drafts, runs the validator, and calls the approval script. An upload does not regenerate the drafts. Activepieces is not connected. |
+| MCP document append and email draft | Not implemented. An approval record is not a document append or an email draft. |
 | Automatic email send | Prohibited, and not implemented |

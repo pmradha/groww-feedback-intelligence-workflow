@@ -34,15 +34,61 @@ The intended design is in [Groww Feedback Intelligence Workflow.pdf](docs/workfl
 | Step | Status |
 | --- | --- |
 | 1. Use the validated Groww reviews CSV | Done. The 12-week file is in `data/`. |
-| 2. Review intelligence: themes, top three, real quotes, fee confusion | Keyword analysis is done. Semantic clustering is not implemented. The final top-three selection for the weekly note is not a separate artifact. |
-| 3. Fee evidence retrieval from official Groww sources | Not implemented. |
-| 4. Generate the Weekly Product Pulse and the Fee Explainer | Not implemented. |
-| 5. Validate length, quotes, review IDs, source links, and fee claims | Dataset checks are done. Output validation is not implemented. |
-| 6. Human approval of both outputs | Specified. Not implemented. |
-| 7. If changes are requested, return to generation | Specified. Not implemented. |
-| 8. After approval, append a document record and create an internal email draft | Not implemented. The email must not be sent automatically. |
+| 2. Review intelligence: themes, top three, real quotes, fee confusion | Keyword analysis is done. The weekly note’s three themes are in the Product Pulse draft. Semantic clustering is not implemented. |
+| 3. Fee evidence retrieval from official Groww sources | Official Groww pricing and charge pages were retrieved for the fee draft. A fee audit of customer complaints is not done. |
+| 4. Generate the Weekly Product Pulse and the Fee Explainer | Drafts are in `outputs/weekly_product_pulse.md` and `outputs/fee_explainer.md`. |
+| 5. Validate length, quotes, review IDs, source links, and fee claims | `scripts/validate_outputs.py` checks structure and citations. It does not prove the fee amounts or replace human approval. |
+| 6. Human approval of both outputs | `scripts/approve_outputs.py` runs validation, shows both drafts, and writes a local approve or revise record. |
+| 7. If changes are requested, return to generation | A revise decision stores the reviewer’s reason and stops. Rewriting the drafts is still manual. No document or email action runs. |
+| 8. After approval, append a document record and create an internal email draft | Not implemented. Approval only writes `outputs/approval_record.md`. The email must not be sent automatically. |
 
-The Product Pulse is at most 250 words and contains the top three themes, three real review quotes, one key observation, and three product action ideas. The Fee Explainer is at most six factual bullets, with two official source links and a last-checked date. Neither output has been produced.
+The Product Pulse is at most 250 words and contains the top three themes, three real review quotes, one key observation, and three product action ideas. A draft is in [outputs/weekly_product_pulse.md](outputs/weekly_product_pulse.md). The Fee Explainer is at most six factual bullets, with two official source links and a last-checked date. A draft is in [outputs/fee_explainer.md](outputs/fee_explainer.md). The validator checks draft structure and citations only. Human approval is the local script below. MCP document append and the internal email draft are still not implemented, and the workflow never sends email.
+
+## Validate the drafts
+
+From the repository root:
+
+```sh
+python3 scripts/validate_outputs.py
+```
+
+The script uses only Python’s standard library. It counts Product Pulse words by splitting on whitespace, and the title counts toward the 250-word limit. A quoted sentence must appear unchanged in the matching review; it does not have to be the whole review. Exit code 0 means the checks passed, 2 means they passed with a review warning, and 1 means a check failed. A warning means unresolved fee wording is still open. The script does not prove that the fee amounts are correct.
+
+## Review and approve the drafts
+
+From the repository root:
+
+```sh
+python3 scripts/approve_outputs.py
+```
+
+The script uses only Python’s standard library. It runs the validator before showing the drafts.
+
+- If validation fails, approval is blocked. The failed checks are printed, and no approval record is written.
+- If validation passes with warnings, each warning is printed before the drafts. The reviewer must type `I acknowledge the warnings` before the drafts are shown. The current fee draft warns that the ₹5 minimum and the lower-of-₹5-or-2.5% wording are not reconciled.
+- The script then prints the Weekly Product Pulse and the Fee Explainer and asks for `approve` or `revise`.
+- `revise` asks for a reason, writes that reason to `outputs/approval_record.md`, and stops. It does not rewrite the drafts, append a document, or create an email draft.
+- `approve` writes the decision and a UTC timestamp to the same file. It does not append a document or create an email draft.
+- The script never sends email.
+
+An approval record does not prove that the fee amounts are correct. Document append and the internal email draft remain future MCP actions. No MCP connection is configured.
+
+## Open the review app
+
+From the repository root:
+
+```sh
+pip install -r requirements-ui.txt
+streamlit run app.py
+```
+
+`requirements-ui.txt` lists `streamlit>=1.32,<2`. The collector dependencies stay in `requirements.txt`.
+
+The app title is “Groww Feedback Intelligence”. It shows the existing Weekly Product Pulse and Fee Explainer, then runs `scripts/validate_outputs.py`. The current fee draft keeps the unresolved brokerage minimum visible: a ₹5 minimum versus the lower of ₹5 or 2.5% of trade value.
+
+The CSV upload stays in the browser session. It is not written to `data/`, and it does not regenerate the drafts. Those drafts were produced from the dataset already in the repository.
+
+Approve and Request Revision call `scripts/approve_outputs.py`. Request Revision needs a reason. A warning must be acknowledged before either decision. Opening the page does not write `outputs/approval_record.md`. The app does not append a document, create an email draft, or send email. Activepieces is not connected.
 
 ## Run the collector
 
@@ -70,4 +116,4 @@ Rerunning the script sends new requests to Google Play and overwrites the three 
 
 ## Publication note
 
-This repository is public on GitHub and has no commits yet. The original CSV files, including display names and profile-image URLs, remain on a branch of the separate FAQ repository. The copies in this working tree do not include those two columns.
+This repository is public on GitHub. The original CSV files, including display names and profile-image URLs, remain on a branch of the separate FAQ repository. The copies in this repository do not include those two columns.
