@@ -38,9 +38,9 @@ The intended design is in [Groww Feedback Intelligence Workflow.pdf](docs/workfl
 | 3. Fee evidence retrieval from official Groww sources | Official Groww pricing and charge pages were retrieved for the fee draft. A fee audit of customer complaints is not done. |
 | 4. Generate the Weekly Product Pulse and the Fee Explainer | Drafts are in `outputs/weekly_product_pulse.md` and `outputs/fee_explainer.md`. |
 | 5. Validate length, quotes, review IDs, source links, and fee claims | `scripts/validate_outputs.py` checks structure and citations. It does not prove the fee amounts or replace human approval. |
-| 6. Human approval of both outputs | `scripts/approve_outputs.py` runs validation, shows both drafts, and writes a local approve or revise record. |
-| 7. If changes are requested, return to generation | A revise decision stores the reviewer’s reason and stops. Rewriting the drafts is still manual. No document or email action runs. |
-| 8. After approval, append a document record and create an internal email draft | Not implemented. Approval only writes `outputs/approval_record.md`. The email must not be sent automatically. |
+| 6. Human approval of both outputs | `scripts/approve_outputs.py` runs validation, shows both drafts, and writes a local approve or revise record. The command-line script does not call Activepieces. |
+| 7. If changes are requested, return to generation | A revise decision stores the reviewer’s reason and stops. Rewriting the drafts is still manual. No document, webhook, or email action runs. |
+| 8. After approval, append a document record and create an internal email draft | Not implemented in this repository. Streamlit can notify the Activepieces draft flow after a local approval. Notion and Gmail still depend on that flow’s own human gate. The email must not be sent automatically. |
 
 The Product Pulse is at most 250 words and contains the top three themes, three real review quotes, one key observation, and three product action ideas. A draft is in [outputs/weekly_product_pulse.md](outputs/weekly_product_pulse.md). The Fee Explainer is at most six factual bullets, with two official source links and a last-checked date. A draft is in [outputs/fee_explainer.md](outputs/fee_explainer.md). The validator checks draft structure and citations only. Human approval is the local script below. MCP document append and the internal email draft are still not implemented, and the workflow never sends email.
 
@@ -68,10 +68,10 @@ The script uses only Python’s standard library. It runs the validator before s
 - If validation passes with warnings, each warning is printed before the drafts. The reviewer must type `I acknowledge the warnings` before the drafts are shown. The current fee draft warns that the ₹5 minimum and the lower-of-₹5-or-2.5% wording are not reconciled.
 - The script then prints the Weekly Product Pulse and the Fee Explainer and asks for `approve` or `revise`.
 - `revise` asks for a reason, writes that reason to `outputs/approval_record.md`, and stops. It does not rewrite the drafts, append a document, or create an email draft.
-- `approve` writes the decision and a UTC timestamp to the same file. It does not append a document or create an email draft.
+- `approve` writes the decision and a UTC timestamp to the same file. It does not append a document, create an email draft, or call Activepieces.
 - The script never sends email.
 
-An approval record does not prove that the fee amounts are correct. Document append and the internal email draft remain future MCP actions. No MCP connection is configured.
+An approval record does not prove that the fee amounts are correct. Document append and the internal email draft remain future actions. No MCP connection is configured. The Streamlit page is the only path that submits a webhook, and only after this script has exited successfully.
 
 ## Open the review app
 
@@ -88,7 +88,18 @@ The app title is “Groww Feedback Intelligence”. It shows the existing Weekly
 
 The CSV upload stays in the browser session. It is not written to `data/`, and it does not regenerate the drafts. Those drafts were produced from the dataset already in the repository.
 
-Approve and Request Revision call `scripts/approve_outputs.py`. Request Revision needs a reason. A warning must be acknowledged before either decision. Opening the page does not write `outputs/approval_record.md`. The app does not append a document, create an email draft, or send email. Activepieces is not connected.
+Approve and Request Revision call `scripts/approve_outputs.py`. Request Revision needs a reason and does not call the webhook. A warning must be acknowledged before either decision. Opening the page does not write `outputs/approval_record.md`. The app does not append a document, create an email draft, or send email.
+
+Approve sends the webhook only after the approval script exits successfully. The request body is the UTF-8 JSON `{"reporting_period":"M5"}`. The app signs those exact bytes with HMAC-SHA256 and sends the hexadecimal digest in the `x-signature` header, with no prefix. HTTP 2xx means the trigger accepted the request. It does not mean Notion was updated or a Gmail draft was created. Verify the Activepieces run. A timeout or connection error is an unknown outcome: the app does not retry, because the flow may have accepted the request without a response reaching the page.
+
+The webhook URL and HMAC secret are read from Streamlit secrets as `ACTIVEPIECES_WEBHOOK_URL` and `ACTIVEPIECES_HMAC_SECRET`. Put them in `.streamlit/secrets.toml`, which is gitignored, or in the Streamlit Cloud secrets UI:
+
+```toml
+ACTIVEPIECES_WEBHOOK_URL = "<catch-webhook-url>"
+ACTIVEPIECES_HMAC_SECRET = "<shared-hmac-secret>"
+```
+
+Do not commit real values. A confirmed HTTP 2xx stores a draft-content hash in `outputs/activepieces_submission.json`, also gitignored. That marker stops this page from sending the same drafts again after a refresh. It does not deduplicate other browsers or users. Activepieces-side idempotency is not documented. The marker stays outside `outputs/approval_record.md` because the approval script rewrites that file from scratch and its `Decision` line remains the status source.
 
 ## Run the collector
 
@@ -116,13 +127,13 @@ Rerunning the script sends new requests to Google Play and overwrites the three 
 
 ## Activepieces workflow
 
-An Activepieces flow draft provides the planned automated path for human approval, saving the Product Pulse to Notion, and creating a Gmail draft containing the Product Pulse and Fee Explainer.
+Activepieces flow `LUINxicrv4qpnQJLFmwMS` is the draft path for human approval, saving the Product Pulse to Notion, and creating a Gmail draft that contains the Product Pulse and Fee Explainer. The flow is unpublished. This repository does not publish it or change its steps.
 
-The human approval gate is `step_4`, which creates a review todo with **Accepted** and **Rejected** options. The `step_11` code gate allows the flow to proceed only when approval status is `Accepted`. The email action creates a draft; it does not send the email.
+The saved trigger sample is `{"body":{"reporting_period":"M5"}}`. The trigger authenticates with HMAC-SHA256 over the raw body and expects the hex digest in `x-signature`. Streamlit sends `{"reporting_period":"M5"}` and that signature. `step_1` reads `inputs.trigger?.body.reporting_period`. Its only recorded test failed because the value was not found, and the exact runtime input shape is still unresolved. A webhook HTTP 2xx does not mean `step_1` passed.
 
-**Current status:** The flow is unpublished and end-to-end execution is not verified. A validation test failed at `step_1` because the expected `reporting_period` was not found. The exact runtime input mapping remains unresolved. The Notion page is currently blank, so a saved report has not been confirmed.
+The human approval gate remains `step_4`, a review todo with **Accepted** and **Rejected**. `step_11` allows the flow to continue only when that status is `Accepted`. `Rejected` must stop the flow before Notion or Gmail. The email action creates a draft and must not send the email. Notion and Gmail have not been confirmed.
 
-The local approval script and Streamlit app provide the documented review paths independently of the automated flow.
+The command-line approval script stays local. Streamlit Request Revision stays local. Streamlit Approve writes the local record first, then attempts the webhook. If the webhook fails, the local record stays in place.
 
 ## Publication note
 
