@@ -114,7 +114,7 @@ Rerunning the script sends new requests to Google Play and overwrites the three 
 - Developer replies remain. They include the public address `support@groww.in`, and one reply includes Groww’s own callback number.
 - A small number of review texts include a support ticket or complaint number. Review text was kept because the analysis depends on it.
 
-- ## Activepieces workflow
+## Activepieces workflow
 
 An Activepieces flow draft provides the planned automated path for human approval, saving the Product Pulse to Notion, and creating a Gmail draft containing the Product Pulse and Fee Explainer.
 
