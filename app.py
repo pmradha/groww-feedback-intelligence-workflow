@@ -29,40 +29,104 @@ REVIEW_CSV = ROOT / "data" / "groww_reviews_12_weeks.csv"
 
 PAGE_STYLE = """
 <style>
-.gfi-header {
-  background: #0b1f3a;
-  color: #f7f9fc;
-  border-radius: 12px;
-  padding: 0.85rem 1.05rem 0.8rem;
-  margin: 0 0 0.85rem 0;
+.stApp,
+[data-testid="stAppViewContainer"],
+[data-testid="stHeader"] {
+  background: #ffffff;
 }
-.gfi-header h1 {
-  color: #f7f9fc;
-  font-size: 1.35rem;
+[data-testid="stMarkdown"] p,
+[data-testid="stMarkdown"] li {
+  color: #1c1c1c;
+}
+.gfi-title {
+  margin: 0 0 1.35rem 0;
+}
+.gfi-title h1 {
+  color: #1c1c1c !important;
+  font-size: 1.45rem;
   font-weight: 650;
   line-height: 1.25;
-  margin: 0 0 0.15rem 0;
+  margin: 0 0 0.25rem 0;
 }
-.gfi-header p {
-  color: #d5deea;
-  font-size: 0.92rem;
+.gfi-title p {
+  color: #5f6b76 !important;
+  font-size: 0.95rem;
   line-height: 1.4;
   margin: 0;
 }
-div[data-testid="stMarkdown"] h2 {
+div[data-testid="stMarkdown"] h2,
+div[data-testid="stHeading"] h3 {
+  color: #1c1c1c !important;
   font-size: 1.05rem;
   font-weight: 650;
   line-height: 1.35;
-  margin: 0.85rem 0 0.35rem 0;
 }
-div[data-testid="stHeading"] h3 {
-  font-size: 1.02rem;
-  font-weight: 650;
-  line-height: 1.35;
+div[data-testid="stCaptionContainer"] {
+  color: #5f6b76;
 }
-section.main > div.block-container {
-  padding-top: 1.25rem;
-  padding-bottom: 2rem;
+[data-testid="stMarkdown"] a {
+  color: #067a5a !important;
+}
+[data-testid="stMarkdown"] a:hover {
+  color: #056348 !important;
+}
+[data-testid="stMetric"] {
+  background: #f7f8f8;
+  border: 1px solid #e6e8eb;
+  border-radius: 8px;
+  padding: 0.7rem 0.9rem 0.55rem;
+}
+[data-testid="stMetricLabel"] {
+  color: #5f6b76;
+}
+[data-testid="stMetricValue"] {
+  color: #1c1c1c;
+}
+[data-testid="stVerticalBlockBorderWrapper"] {
+  border-color: #e6e8eb;
+  border-radius: 8px;
+  background: #ffffff;
+}
+[data-testid="stTab"][aria-selected="true"] p {
+  color: #1c1c1c !important;
+}
+[data-testid="stTab"][aria-selected="false"] p {
+  color: #5f6b76 !important;
+}
+.react-aria-SelectionIndicator {
+  background-color: #00d09c !important;
+}
+[data-testid="stBaseButton-primary"] {
+  background-color: #00d09c !important;
+  border: 1px solid #00d09c !important;
+}
+[data-testid="stBaseButton-primary"] p {
+  color: #14221c !important;
+}
+[data-testid="stBaseButton-primary"]:hover:not(:disabled) {
+  background-color: #00c492 !important;
+  border-color: #00c492 !important;
+}
+[data-testid="stBaseButton-primary"]:disabled {
+  background-color: #eef1f0 !important;
+  border-color: #e4e7e6 !important;
+}
+[data-testid="stBaseButton-primary"]:disabled p {
+  color: #8a928f !important;
+}
+input[type="checkbox"] {
+  accent-color: #00d09c;
+}
+[data-testid="stCheckbox"] label[data-selected="true"] > div:first-of-type {
+  background-color: #00d09c !important;
+  border-color: #00d09c !important;
+}
+[data-testid="stCheckbox"] label[data-selected="true"] polyline {
+  stroke: #14221c !important;
+}
+.block-container {
+  padding-top: 2rem;
+  padding-bottom: 2.75rem;
 }
 @media (max-width: 700px) {
   [data-testid="stHorizontalBlock"] {
@@ -78,7 +142,7 @@ section.main > div.block-container {
 """
 
 HEADER_HTML = """
-<div class="gfi-header">
+<div class="gfi-title">
   <h1>Groww Feedback Intelligence</h1>
   <p>Customer feedback · Weekly review</p>
 </div>
