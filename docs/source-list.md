@@ -1,6 +1,6 @@
 # Sources
 
-This list includes only sources used for the files in this repository. Official Groww fee pages have not been retrieved, so they are not listed.
+This list includes only sources used for the files in this repository.
 
 ## Groww Google Play reviews
 
