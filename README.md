@@ -114,6 +114,16 @@ Rerunning the script sends new requests to Google Play and overwrites the three 
 - Developer replies remain. They include the public address `support@groww.in`, and one reply includes Groww’s own callback number.
 - A small number of review texts include a support ticket or complaint number. Review text was kept because the analysis depends on it.
 
+- ## Activepieces workflow
+
+An Activepieces flow draft provides the planned automated path for human approval, saving the Product Pulse to Notion, and creating a Gmail draft containing the Product Pulse and Fee Explainer.
+
+The human approval gate is `step_4`, which creates a review todo with **Accepted** and **Rejected** options. The `step_11` code gate allows the flow to proceed only when approval status is `Accepted`. The email action creates a draft; it does not send the email.
+
+**Current status:** The flow is unpublished and end-to-end execution is not verified. A validation test failed at `step_1` because the expected `reporting_period` was not found. The exact runtime input mapping remains unresolved. The Notion page is currently blank, so a saved report has not been confirmed.
+
+The local approval script and Streamlit app provide the documented review paths independently of the automated flow.
+
 ## Publication note
 
 This repository is public on GitHub. The original CSV files, including display names and profile-image URLs, remain on a branch of the separate FAQ repository. The copies in this repository do not include those two columns.
