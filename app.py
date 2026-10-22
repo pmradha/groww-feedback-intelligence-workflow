@@ -389,12 +389,19 @@ def accepted_by_hash(marker):
     return accepted
 
 
-def remember_submission(draft_hash, outcome, http_status, error_category=None):
+def remember_submission(
+    draft_hash,
+    outcome,
+    http_status,
+    error_category=None,
+    webhook_id_present=None,
+):
     """Persist webhook state beside the approval record.
 
     scripts/approve_outputs.py rewrites outputs/approval_record.md from
     scratch, so the marker cannot live in that file without a breaking
     format change. Only an HTTP 2xx records the draft hash as accepted.
+    webhook_id_present is stored only as a boolean, never as a header value.
     """
     current = load_submission_marker()
     accepted = accepted_by_hash(current)
@@ -410,6 +417,8 @@ def remember_submission(draft_hash, outcome, http_status, error_category=None):
         "last_error_category": error_category,
         "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
+    if isinstance(webhook_id_present, bool):
+        marker["webhook_id_present"] = webhook_id_present
     save_submission_marker(marker)
     return marker
 
@@ -442,8 +451,13 @@ def connection_failure_category(exc):
     return "connection_error"
 
 
+def response_has_webhook_id(response):
+    """Return whether x-webhook-id is present. Do not return its value."""
+    return response.getheader("x-webhook-id") is not None
+
+
 def post_signed_webhook(url, secret, body, timeout):
-    """POST the exact body bytes. Return outcome and status only.
+    """POST the exact body bytes. Return outcome, status, and webhook_id_present.
 
     Timeout and connection errors are unknown: the server may have accepted
     the request. This function does not retry and does not read a body.
@@ -467,16 +481,22 @@ def post_signed_webhook(url, secret, body, timeout):
         connection.request("POST", path, body=body, headers=headers)
         response = connection.getresponse()
         code = response.status
+        webhook_id_present = response_has_webhook_id(response)
         try:
             response.close()
         except OSError:
             pass
-        return {"outcome": outcome_for_status(code), "http_status": code}
+        return {
+            "outcome": outcome_for_status(code),
+            "http_status": code,
+            "webhook_id_present": webhook_id_present,
+        }
     except (TimeoutError, socket.timeout, http.client.HTTPException, OSError) as exc:
         return {
             "outcome": "unknown",
             "http_status": None,
             "error_category": connection_failure_category(exc),
+            "webhook_id_present": False,
         }
     finally:
         try:
@@ -505,11 +525,14 @@ def submit_activepieces():
         }
     prior = accepted_by_hash(marker)
     if draft_hash in prior:
-        return {
+        duplicate = {
             "outcome": "already_accepted",
             "http_status": prior.get(draft_hash),
             "reason": "duplicate",
         }
+        if isinstance(marker, dict) and isinstance(marker.get("webhook_id_present"), bool):
+            duplicate["webhook_id_present"] = marker["webhook_id_present"]
+        return duplicate
 
     url = configured_secret("ACTIVEPIECES_WEBHOOK_URL")
     secret = configured_secret("ACTIVEPIECES_HMAC_SECRET")
@@ -538,6 +561,7 @@ def submit_activepieces():
             result["outcome"],
             result.get("http_status"),
             result.get("error_category"),
+            result.get("webhook_id_present"),
         )
     except OSError:
         marker_saved = False
@@ -549,11 +573,27 @@ def submit_activepieces():
     }
     if result.get("error_category") in FAILURE_CATEGORIES:
         recorded["error_category"] = result["error_category"]
+    if isinstance(result.get("webhook_id_present"), bool):
+        recorded["webhook_id_present"] = result["webhook_id_present"]
     return recorded
+
+
+def webhook_id_present_suffix(webhook):
+    """Format the stored boolean only. Never include a header value."""
+    present = webhook.get("webhook_id_present")
+    if not isinstance(present, bool):
+        return ""
+    shown = "true" if present else "false"
+    return f" webhook_id_present: {shown}."
 
 
 def webhook_feedback(webhook):
     """Map a webhook result to a level and a message with no secret values."""
+    level, message = webhook_feedback_message(webhook)
+    return level, message + webhook_id_present_suffix(webhook)
+
+
+def webhook_feedback_message(webhook):
     outcome = webhook.get("outcome")
     code = webhook.get("http_status")
     if outcome == "accepted":
@@ -668,12 +708,13 @@ def standing_webhook_feedback():
         draft_hash = None
     accepted = accepted_by_hash(marker)
     if marker and draft_hash and draft_hash in accepted:
-        return webhook_feedback(
-            {
-                "outcome": "accepted",
-                "http_status": accepted.get(draft_hash),
-            }
-        )
+        replay = {
+            "outcome": "accepted",
+            "http_status": accepted.get(draft_hash),
+        }
+        if isinstance(marker.get("webhook_id_present"), bool):
+            replay["webhook_id_present"] = marker["webhook_id_present"]
+        return webhook_feedback(replay)
     if not marker:
         return (
             "local",
@@ -690,16 +731,23 @@ def standing_webhook_feedback():
             "The external submission still needs attention.",
         )
     if last_outcome == "unknown":
-        return webhook_feedback({
+        replay = {
             "outcome": "unknown",
             "error_category": marker.get("last_error_category"),
-        })
+        }
+        if isinstance(marker.get("webhook_id_present"), bool):
+            replay["webhook_id_present"] = marker["webhook_id_present"]
+        return webhook_feedback(replay)
     if last_outcome == "not_configured":
         return webhook_feedback({"outcome": "not_configured", "missing": []})
     if last_outcome == "failed":
-        return webhook_feedback(
-            {"outcome": "failed", "http_status": marker.get("last_http_status")}
-        )
+        replay = {
+            "outcome": "failed",
+            "http_status": marker.get("last_http_status"),
+        }
+        if isinstance(marker.get("webhook_id_present"), bool):
+            replay["webhook_id_present"] = marker["webhook_id_present"]
+        return webhook_feedback(replay)
     return (
         "local",
         "Local approval is recorded. "
