@@ -762,7 +762,12 @@ def show_webhook_feedback(level, message):
     elif level == "failed":
         st.error(message)
     elif level == "accepted":
-        st.info(message)
+        st.info(
+            "Local approval is recorded. "
+            "Notion and Gmail completion have not been confirmed."
+        )
+        with st.expander("Submission details"):
+            st.write(message)
     else:
         st.info(message)
 
@@ -973,14 +978,19 @@ def render_approval():
         st.rerun()
 
     last = st.session_state.get("gfi_last_result") or {}
+    record_text = ""
     if last.get("status") == "recorded":
         record_path = approve_outputs.DEFAULT_RECORD
         if record_path.is_file():
-            st.markdown(record_path.read_text(encoding="utf-8"))
+            record_text = record_path.read_text(encoding="utf-8")
     decision_output = last.get("output") or ""
-    if decision_output:
-        st.subheader("Approval script output")
-        st.code(decision_output)
+    if record_text or decision_output:
+        with st.expander("Approval record"):
+            if record_text:
+                st.markdown(record_text)
+            if decision_output:
+                st.subheader("Approval script output")
+                st.code(decision_output)
 
 
 def main():
