@@ -105,14 +105,48 @@ div[data-testid="stCaptionContainer"] {
   border-radius: 8px;
   background: #ffffff;
 }
-[data-testid="stTab"][aria-selected="true"] p {
-  color: #1c1c1c !important;
+[data-testid="stTabs"] [role="tablist"] {
+  gap: 0.5rem;
+}
+[data-testid="stTabs"] [role="tablist"]::after {
+  display: none;
+}
+[data-testid="stTab"] {
+  height: auto !important;
+  min-height: 2.5rem;
+  padding: 0.4rem 0.95rem !important;
+  border-radius: 8px !important;
+  border: 1px solid #d7ddda !important;
+  background: #ffffff !important;
+  color: #5f6b76 !important;
 }
 [data-testid="stTab"][aria-selected="false"] p {
   color: #5f6b76 !important;
 }
-.react-aria-SelectionIndicator {
+[data-testid="stTab"][aria-selected="true"],
+[data-testid="stTab"][data-selected] {
   background-color: #00d09c !important;
+  border-color: #00d09c !important;
+  color: #14221c !important;
+}
+[data-testid="stTab"][aria-selected="true"] p,
+[data-testid="stTab"][data-selected] p {
+  color: #14221c !important;
+  font-weight: 600;
+}
+[data-testid="stTab"][aria-selected="true"]:hover,
+[data-testid="stTab"][data-selected]:hover,
+[data-testid="stTab"][data-hovered][aria-selected="true"] {
+  background-color: #00c492 !important;
+  border-color: #00c492 !important;
+}
+[data-testid="stTab"][aria-selected="false"]:hover,
+[data-testid="stTab"][data-hovered][aria-selected="false"] {
+  border-color: #00c492 !important;
+  background: #f3fbf8 !important;
+}
+[data-testid="stTab"] .react-aria-SelectionIndicator {
+  display: none !important;
 }
 [data-testid="stBaseButton-primary"] {
   background-color: #00d09c !important;
