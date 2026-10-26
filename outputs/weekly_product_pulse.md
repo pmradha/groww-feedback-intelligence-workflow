@@ -22,4 +22,4 @@ Short generic praise inflates the 77.1% five-star share. Support and charges rec
 
 1. Show complaint reply status. The 21 September review says there was no reply.
 2. Link charge questions to the official explanation. The 19 October review asks why brokerage is high. That does not prove the fee is wrong.
-3. Keep the simple interface. The 28 August review asks that a cancelled or rejected SIP disappear after 30 days, and that sold orders leave the active holdings view.
+3. Keep the simple interface. The 28 August review calls the app clean and easy to use.
