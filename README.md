@@ -4,8 +4,11 @@ This project turns public Groww app reviews into a weekly product note and a fac
 
 The intended reader is a product manager who needs a short, checkable weekly readout, and a reviewer who needs to see which parts of that workflow already exist.
 
-**Demo Video URLs:** https://www.dropbox.com/scl/fi/qh9pctkq06l0wlpt3y2ra/GrowFeebackhubIntelligence_demo_L.mp4?rlkey=tnkgcbnd7zbv2x95jucqdc5h2&st=38uoqmex&dl=0
-                     https://www.dropbox.com/scl/fi/2s8ce5udqvtfy7z5efli6/ActivePieces-Workflow-GrowwFeedbackIntelligence.mp4?rlkey=3otv1ojtlagg9vgxgx4txcrii&st=ukfgnw33&dl=0
+**Demo Video URLs:** 
+
+User Interface: https://www.dropbox.com/scl/fi/qh9pctkq06l0wlpt3y2ra/GrowFeebackhubIntelligence_demo_L.mp4?rlkey=tnkgcbnd7zbv2x95jucqdc5h2&st=38uoqmex&dl=0
+
+Workflow: https://www.dropbox.com/scl/fi/2s8ce5udqvtfy7z5efli6/ActivePieces-Workflow-GrowwFeedbackIntelligence.mp4?rlkey=3otv1ojtlagg9vgxgx4txcrii&st=ukfgnw33&dl=0
 
 ## Dataset
 
